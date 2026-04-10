@@ -361,6 +361,22 @@
     margin-bottom: 1.5rem;
     text-align: center;
   }
+
+  /* CPP disclaimer */
+  .cpp-note {
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .cpp-note strong {
+    color: var(--yellow);
+  }
 </style>
 </head>
 <body>
@@ -434,9 +450,15 @@
     </div>
   </div>
 
+  <div class="cpp-note" id="cpp-note" style="display:none;">
+    <strong>Note:</strong> RES-TOU-CPP includes up to 20 Critical Peak days/year (41.0&cent;/kWh during on-peak hours) called by Duke Energy.
+    These cannot be predicted from historical data and are not reflected in this estimate. Actual TOU-CPP costs may be higher on those days.
+  </div>
+
   <footer>
     <p>Rates: RES &mdash; 12.623&cent;/kWh (first 800 kWh Oct-Apr), 11.623&cent;/kWh (additional Oct-Apr), 12.623&cent;/kWh (May-Sep) &bull;
-    EV Overnight &mdash; 13.096&cent;/kWh standard, 6.548&cent;/kWh discount (11 PM &ndash; 5 AM EPT)</p>
+    EV Overnight &mdash; 13.096&cent;/kWh standard, 6.548&cent;/kWh discount (11 PM &ndash; 5 AM EPT) &bull;
+    TOU-CPP &mdash; 21.952&cent;/kWh on-peak, 11.000&cent;/kWh off-peak, 8.274&cent;/kWh discount</p>
     <p style="margin-top: 0.75rem;">
       Made by Mx772 &nbsp;
       <a href="https://github.com/MxMiscellanea/DukePowerEvCalculator" target="_blank" rel="noopener" style="color: var(--muted); vertical-align: middle;" title="View on GitHub">
@@ -466,6 +488,90 @@ function toEastern(unixSeconds) {
     offsetHours = -4;
   }
   return new Date(ms + offsetHours * 3600000);
+}
+
+// --- Holidays (for TOU-CPP on-peak exclusion) ---
+function easterDate(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function getHolidays(year) {
+  const holidays = new Set();
+  function addDate(d) {
+    holidays.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`);
+  }
+  function addObserved(month, day) {
+    const d = new Date(Date.UTC(year, month, day));
+    addDate(d);
+    const dow = d.getUTCDay();
+    if (dow === 6) addDate(new Date(d.getTime() - 86400000));
+    else if (dow === 0) addDate(new Date(d.getTime() + 86400000));
+  }
+  addObserved(0, 1); // New Year's
+  const easter = easterDate(year);
+  addDate(new Date(easter.getTime() - 2 * 86400000)); // Good Friday
+  for (let d = 31; d >= 25; d--) { // Memorial Day (last Mon of May)
+    const dt = new Date(Date.UTC(year, 4, d));
+    if (dt.getUTCDay() === 1) { addDate(dt); break; }
+  }
+  addObserved(6, 4); // Independence Day
+  for (let d = 1; d <= 7; d++) { // Labor Day (first Mon of Sep)
+    const dt = new Date(Date.UTC(year, 8, d));
+    if (dt.getUTCDay() === 1) { addDate(dt); break; }
+  }
+  let thCount = 0;
+  for (let d = 1; d <= 30; d++) { // Thanksgiving (4th Thu of Nov) + day after
+    const dt = new Date(Date.UTC(year, 10, d));
+    if (dt.getUTCDay() === 4 && ++thCount === 4) {
+      addDate(dt);
+      addDate(new Date(dt.getTime() + 86400000));
+      break;
+    }
+  }
+  addObserved(11, 25); // Christmas
+  return holidays;
+}
+
+const holidayCache = {};
+function isTOUHoliday(easternDate) {
+  const y = easternDate.getUTCFullYear();
+  if (!holidayCache[y]) holidayCache[y] = getHolidays(y);
+  const key = `${y}-${String(easternDate.getUTCMonth()+1).padStart(2,'0')}-${String(easternDate.getUTCDate()).padStart(2,'0')}`;
+  return holidayCache[y].has(key);
+}
+
+// --- TOU-CPP classification ---
+function classifyTOUCPP(easternDate) {
+  const month = easternDate.getUTCMonth() + 1;
+  const hour = easternDate.getUTCHours();
+  const dow = easternDate.getUTCDay();
+  const isSummer = month >= 5 && month <= 9;
+  const isWeekday = dow >= 1 && dow <= 5;
+
+  if (isSummer) {
+    if (hour >= 1 && hour < 6) return 'discount';
+    if (isWeekday && !isTOUHoliday(easternDate) && hour >= 18 && hour < 21) return 'onpeak';
+    return 'offpeak';
+  } else {
+    if (hour >= 1 && hour < 3) return 'discount';
+    if (hour >= 11 && hour < 16) return 'discount';
+    if (isWeekday && !isTOUHoliday(easternDate) && hour >= 6 && hour < 9) return 'onpeak';
+    return 'offpeak';
+  }
 }
 
 // --- XML Parsing ---
@@ -524,20 +630,39 @@ function filterLast12Months(readings) {
 // --- Aggregate ---
 function aggregate(readings) {
   const monthly = {};
-  const monthlyDiscount = {};
+  const monthlyDiscount = {};       // EV Overnight discount window (11PM–5AM)
+  const touOnPeak = {};
+  const touOffPeak = {};
+  const touDiscount = {};
+  const touOffPeakNight = {};       // TOU off-peak that falls in EV night window
+  const touDiscountNight = {};      // TOU discount that falls in EV night window
 
   for (const r of readings) {
     const dt = toEastern(r.ts);
     const y = dt.getUTCFullYear();
     const m = dt.getUTCMonth() + 1;
     const key = `${y}-${String(m).padStart(2,'0')}`;
-    monthly[key] = (monthly[key] || 0) + r.kwh;
     const hour = dt.getUTCHours();
-    if (hour >= 23 || hour < 5) {
+
+    monthly[key] = (monthly[key] || 0) + r.kwh;
+
+    const isEvNight = (hour >= 23 || hour < 5);
+    if (isEvNight) {
       monthlyDiscount[key] = (monthlyDiscount[key] || 0) + r.kwh;
     }
+
+    const touClass = classifyTOUCPP(dt);
+    if (touClass === 'onpeak') {
+      touOnPeak[key] = (touOnPeak[key] || 0) + r.kwh;
+    } else if (touClass === 'offpeak') {
+      touOffPeak[key] = (touOffPeak[key] || 0) + r.kwh;
+      if (isEvNight) touOffPeakNight[key] = (touOffPeakNight[key] || 0) + r.kwh;
+    } else {
+      touDiscount[key] = (touDiscount[key] || 0) + r.kwh;
+      if (isEvNight) touDiscountNight[key] = (touDiscountNight[key] || 0) + r.kwh;
+    }
   }
-  return { monthly, monthlyDiscount };
+  return { monthly, monthlyDiscount, touOnPeak, touOffPeak, touDiscount, touOffPeakNight, touDiscountNight };
 }
 
 // --- Cost calculations ---
@@ -573,6 +698,20 @@ function calcEV(monthlyKwh, monthlyDiscount) {
   return { total, costs };
 }
 
+function calcTOUCPP(onPeak, offPeak, discount) {
+  const costs = {};
+  let total = 0;
+  const keys = new Set([...Object.keys(onPeak), ...Object.keys(offPeak), ...Object.keys(discount)]);
+  for (const key of keys) {
+    const cost = (onPeak[key] || 0) * 0.21952
+              + (offPeak[key] || 0) * 0.11000
+              + (discount[key] || 0) * 0.08274;
+    costs[key] = cost;
+    total += cost;
+  }
+  return { total, costs };
+}
+
 // --- Formatting ---
 const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -581,53 +720,90 @@ function fmtKwh(n) { return n.toFixed(1); }
 function fmtPct(n) { return n.toFixed(1) + '%'; }
 
 // --- Render ---
-function renderResults(monthly, monthlyDiscount, evKwh, mode, shiftPct) {
+function renderResults(data, evKwh, mode, shiftPct) {
+  const { monthly, monthlyDiscount, touOnPeak, touOffPeak, touDiscount, touOffPeakNight, touDiscountNight } = data;
   const keys = Object.keys(monthly).sort();
   if (keys.length === 0) return;
 
-  // Scenario 1: actual usage (unchanged)
+  // Scenario 1: actual usage
   const res1 = calcRES(monthly);
   const ev1 = calcEV(monthly, monthlyDiscount);
+  const tou1 = calcTOUCPP(touOnPeak, touOffPeak, touDiscount);
 
-  // Scenario 2: depends on mode
+  // Scenario 2: with EV adjustments
   const monthlyEv = {};
   const monthlyDiscountEv = {};
+  const touOnPeakEv = {};
+  const touOffPeakEv = {};
+  const touDiscountEv = {};
 
   if (mode === 'add') {
-    // Add new kWh, all charged at night
     for (const k of keys) {
+      const m = parseInt(k.split('-')[1], 10);
+      const isSummer = m >= 5 && m <= 9;
+      const nightDiscFrac = isSummer ? 4/6 : 2/6;
+
       monthlyEv[k] = monthly[k] + evKwh;
       monthlyDiscountEv[k] = (monthlyDiscount[k] || 0) + evKwh;
+
+      touOnPeakEv[k] = touOnPeak[k] || 0;
+      touOffPeakEv[k] = (touOffPeak[k] || 0) + evKwh * (1 - nightDiscFrac);
+      touDiscountEv[k] = (touDiscount[k] || 0) + evKwh * nightDiscFrac;
     }
   } else {
-    // Shift: total kWh stays the same, move (evKwh * shiftPct%) from day to night
     const shiftAmount = evKwh * (shiftPct / 100);
     for (const k of keys) {
-      monthlyEv[k] = monthly[k]; // total unchanged
-      // Can't shift more than what's currently daytime usage
+      const m = parseInt(k.split('-')[1], 10);
+      const isSummer = m >= 5 && m <= 9;
+      const nightDiscFrac = isSummer ? 4/6 : 2/6;
+
+      monthlyEv[k] = monthly[k];
       const currentDay = monthly[k] - (monthlyDiscount[k] || 0);
       const actualShift = Math.min(shiftAmount, currentDay);
       monthlyDiscountEv[k] = (monthlyDiscount[k] || 0) + actualShift;
+
+      const dayOnPeak = touOnPeak[k] || 0;
+      const dayOffPeak = (touOffPeak[k] || 0) - (touOffPeakNight[k] || 0);
+      const dayDisc = (touDiscount[k] || 0) - (touDiscountNight[k] || 0);
+      const dayTotal = dayOnPeak + dayOffPeak + dayDisc;
+
+      if (dayTotal > 0 && actualShift > 0) {
+        touOnPeakEv[k] = (touOnPeak[k] || 0) - actualShift * (dayOnPeak / dayTotal);
+        touOffPeakEv[k] = (touOffPeak[k] || 0) - actualShift * (dayOffPeak / dayTotal) + actualShift * (1 - nightDiscFrac);
+        touDiscountEv[k] = (touDiscount[k] || 0) - actualShift * (dayDisc / dayTotal) + actualShift * nightDiscFrac;
+      } else {
+        touOnPeakEv[k] = touOnPeak[k] || 0;
+        touOffPeakEv[k] = touOffPeak[k] || 0;
+        touDiscountEv[k] = touDiscount[k] || 0;
+      }
     }
   }
 
   const res2 = calcRES(monthlyEv);
   const ev2 = calcEV(monthlyEv, monthlyDiscountEv);
+  const tou2 = calcTOUCPP(touOnPeakEv, touOffPeakEv, touDiscountEv);
 
-  renderScenario('1', keys, monthly, monthlyDiscount, res1, ev1);
-  renderScenario('2', keys, monthlyEv, monthlyDiscountEv, res2, ev2);
+  renderScenario('1', keys, monthly, monthlyDiscount, res1, tou1, ev1);
+  renderScenario('2', keys, monthlyEv, monthlyDiscountEv, res2, tou2, ev2);
 
   document.getElementById('results').style.display = 'block';
+  document.getElementById('cpp-note').style.display = 'block';
 }
 
-function renderScenario(id, keys, monthly, monthlyDiscount, res, ev) {
-  const diff = res.total - ev.total;
-  const winner = diff > 0 ? 'EV Overnight' : 'RES';
-  const savings = Math.abs(diff);
+function renderScenario(id, keys, monthly, monthlyDiscount, res, tou, ev) {
+  const plans = [
+    { name: 'RES', total: res.total },
+    { name: 'TOU-CPP', total: tou.total },
+    { name: 'EV Overnight', total: ev.total },
+  ];
+  plans.sort((a, b) => a.total - b.total);
+  const best = plans[0];
+  const worst = plans[2];
+  const savings = worst.total - best.total;
 
   // Winner banner
   document.getElementById('winner' + id).innerHTML =
-    `<span>${winner}</span> saves you <span class="amount">${fmt$(savings)}/year</span>`;
+    `<span>${best.name}</span> saves you <span class="amount">${fmt$(savings)}/year</span> vs ${worst.name}`;
 
   // Summary cards
   const totalKwh = Object.values(monthly).reduce((a, b) => a + b, 0);
@@ -639,55 +815,63 @@ function renderScenario(id, keys, monthly, monthlyDiscount, res, ev) {
       <div class="detail">${fmtKwh(totalKwh)} kWh total</div>
     </div>
     <div class="card">
-      <div class="label">EV Overnight Total</div>
-      <div class="value">${fmt$(ev.total)}</div>
-      <div class="detail">${fmtPct(totalNight / totalKwh * 100)} nighttime usage</div>
+      <div class="label">TOU-CPP Total</div>
+      <div class="value">${fmt$(tou.total)}</div>
+      <div class="detail">${fmtKwh(totalKwh)} kWh total</div>
     </div>
     <div class="card">
-      <div class="label">Annual Savings</div>
-      <div class="value ${diff > 0 ? 'green' : 'red'}">${diff > 0 ? '+' : '-'}${fmt$(savings)}</div>
-      <div class="detail">with ${winner}</div>
+      <div class="label">EV Overnight Total</div>
+      <div class="value">${fmt$(ev.total)}</div>
+      <div class="detail">${fmtPct(totalNight / totalKwh * 100)} nighttime</div>
+    </div>
+    <div class="card">
+      <div class="label">Best Plan</div>
+      <div class="value green">+${fmt$(savings)}</div>
+      <div class="detail">with ${best.name}</div>
     </div>
   `;
 
   // Table
   let html = `<thead><tr>
-    <th>Month</th><th>Total kWh</th><th>Night kWh</th><th>Night %</th>
-    <th>RES Cost</th><th>EV Cost</th><th>Savings</th>
+    <th>Month</th><th>Total kWh</th>
+    <th>RES</th><th>TOU-CPP</th><th>EV Overnight</th>
   </tr></thead><tbody>`;
 
-  let sumKwh = 0, sumNight = 0, sumRes = 0, sumEv = 0;
+  let sumKwh = 0, sumRes = 0, sumTou = 0, sumEv = 0;
   for (const key of keys) {
     const [y, mStr] = key.split('-');
     const m = parseInt(mStr, 10);
     const kwh = monthly[key];
-    const night = monthlyDiscount[key] || 0;
-    const pct = kwh ? (night / kwh * 100) : 0;
     const rCost = res.costs[key];
+    const tCost = tou.costs[key];
     const eCost = ev.costs[key];
-    const d = rCost - eCost;
-    sumKwh += kwh; sumNight += night; sumRes += rCost; sumEv += eCost;
+    sumKwh += kwh; sumRes += rCost; sumTou += tCost; sumEv += eCost;
+
+    const minCost = Math.min(rCost, tCost, eCost);
+    const rClass = rCost === minCost ? ' class="savings-pos"' : '';
+    const tClass = tCost === minCost ? ' class="savings-pos"' : '';
+    const eClass = eCost === minCost ? ' class="savings-pos"' : '';
 
     html += `<tr>
       <td>${MONTH_NAMES[m]} ${y}</td>
       <td>${fmtKwh(kwh)}</td>
-      <td>${fmtKwh(night)}</td>
-      <td>${fmtPct(pct)}</td>
-      <td>${fmt$(rCost)}</td>
-      <td>${fmt$(eCost)}</td>
-      <td class="${d >= 0 ? 'savings-pos' : 'savings-neg'}">${d >= 0 ? '+' : ''}${fmt$(d)}</td>
+      <td${rClass}>${fmt$(rCost)}</td>
+      <td${tClass}>${fmt$(tCost)}</td>
+      <td${eClass}>${fmt$(eCost)}</td>
     </tr>`;
   }
 
-  const totalDiff = sumRes - sumEv;
+  const minTotal = Math.min(sumRes, sumTou, sumEv);
+  const rTotalCls = sumRes === minTotal ? ' class="savings-pos"' : '';
+  const tTotalCls = sumTou === minTotal ? ' class="savings-pos"' : '';
+  const eTotalCls = sumEv === minTotal ? ' class="savings-pos"' : '';
+
   html += `<tr class="total-row">
     <td>Total</td>
     <td>${fmtKwh(sumKwh)}</td>
-    <td>${fmtKwh(sumNight)}</td>
-    <td>${fmtPct(sumKwh ? (sumNight / sumKwh * 100) : 0)}</td>
-    <td>${fmt$(sumRes)}</td>
-    <td>${fmt$(sumEv)}</td>
-    <td class="${totalDiff >= 0 ? 'savings-pos' : 'savings-neg'}">${totalDiff >= 0 ? '+' : ''}${fmt$(totalDiff)}</td>
+    <td${rTotalCls}>${fmt$(sumRes)}</td>
+    <td${tTotalCls}>${fmt$(sumTou)}</td>
+    <td${eTotalCls}>${fmt$(sumEv)}</td>
   </tr>`;
   html += '</tbody>';
   document.getElementById('table' + id).innerHTML = html;
@@ -695,8 +879,7 @@ function renderScenario(id, keys, monthly, monthlyDiscount, res, ev) {
 
 // --- State ---
 let parsedReadings = null;
-let filteredMonthly = null;
-let filteredMonthlyDiscount = null;
+let filteredData = null;
 
 function processFile(text) {
   const readings = parseUsageXML(text);
@@ -713,9 +896,7 @@ function processFile(text) {
     return;
   }
 
-  const agg = aggregate(filtered);
-  filteredMonthly = agg.monthly;
-  filteredMonthlyDiscount = agg.monthlyDiscount;
+  filteredData = aggregate(filtered);
 
   document.getElementById('data-range').textContent =
     `Showing ${filtered.length.toLocaleString()} readings from ${MONTH_NAMES[startMonth]} ${startYear} \u2013 ${MONTH_NAMES[endMonth]} ${endYear}`;
@@ -788,10 +969,10 @@ function updateHeading() {
 }
 
 function recalc() {
-  if (!filteredMonthly) return;
+  if (!filteredData) return;
   const p = getEvParams();
   updateHeading();
-  renderResults(filteredMonthly, filteredMonthlyDiscount, p.evKwh, p.mode, p.shiftPct);
+  renderResults(filteredData, p.evKwh, p.mode, p.shiftPct);
 }
 
 evSlider.addEventListener('input', () => {
