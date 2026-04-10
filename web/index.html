@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duke Energy Plan Comparison</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+  }
+
+  /* Upload area */
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface);
+  }
+
+  .upload-area:hover, .upload-area.dragover {
+    border-color: var(--accent);
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  .upload-area svg {
+    width: 48px;
+    height: 48px;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  .upload-area p {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+
+  .upload-area .browse {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .upload-area .filename {
+    color: var(--accent);
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+
+  #file-input { display: none; }
+
+  /* Privacy notice */
+  .privacy {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  .privacy svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* EV slider */
+  .ev-option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-top: 1.5rem;
+  }
+
+  .ev-option label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .ev-option input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .ev-option .ev-val {
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  /* Mode toggle */
+  .ev-controls {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-top: 0.75rem;
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 0.75rem;
+  }
+
+  .mode-toggle button {
+    flex: 1;
+    padding: 0.45rem 1rem;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+
+  .mode-toggle button.active {
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .mode-desc {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .shift-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .shift-row label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .shift-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .shift-row .shift-val {
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 50px;
+    text-align: right;
+  }
+
+  /* Results */
+  #results { display: none; margin-top: 2rem; }
+
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+
+  .card .label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+
+  .card .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  .card .value.green { color: var(--green); }
+  .card .value.red { color: var(--red); }
+  .card .value.accent { color: var(--accent); }
+
+  .card .detail {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  .winner-banner {
+    background: linear-gradient(135deg, rgba(74, 222, 128, 0.12), rgba(56, 189, 248, 0.12));
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .winner-banner .amount {
+    color: var(--green);
+  }
+
+  /* Scenario toggle */
+  .scenario-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .scenario-tab {
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+
+  .scenario-tab.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--surface2);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  th {
+    background: var(--surface);
+    padding: 0.75rem 1rem;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  th:first-child { text-align: left; }
+
+  td {
+    padding: 0.6rem 1rem;
+    text-align: right;
+    border-top: 1px solid var(--surface2);
+    white-space: nowrap;
+  }
+
+  td:first-child {
+    text-align: left;
+    font-weight: 500;
+  }
+
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .total-row td {
+    font-weight: 700;
+    border-top: 2px solid var(--border);
+    background: var(--surface);
+  }
+
+  .savings-pos { color: var(--green); }
+  .savings-neg { color: var(--red); }
+
+  /* Footer */
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--surface2);
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  /* Data range info */
+  .data-range {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Duke Energy Plan Comparison</h1>
+  <p class="subtitle">Compare the standard RES plan vs. EV Overnight plan using your actual usage data.</p>
+
+  <div class="upload-area" id="drop-zone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <p>Drag &amp; drop your <strong>Energy Usage.xml</strong> file here</p>
+    <p>or <span class="browse" id="browse-btn">browse to select</span></p>
+    <p class="filename" id="filename"></p>
+  </div>
+  <input type="file" id="file-input" accept=".xml">
+
+  <div class="privacy">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+    </svg>
+    Your data never leaves your computer. All processing happens right here in your browser.
+  </div>
+
+  <div class="ev-option">
+    <label for="ev-kwh">Monthly EV kWh:</label>
+    <input type="range" id="ev-kwh" min="0" max="1000" step="50" value="400">
+    <span class="ev-val" id="ev-val-label">400 kWh</span>
+  </div>
+
+  <div class="ev-controls">
+    <div class="mode-toggle">
+      <button id="mode-add" class="active">Add New Usage</button>
+      <button id="mode-shift">Shift Existing Usage</button>
+    </div>
+    <p class="mode-desc" id="mode-desc">Adds EV charging kWh as new usage, all charged at night. Use this if you don't have an EV yet.</p>
+    <div class="shift-row" id="shift-row" style="display:none;">
+      <label for="shift-pct">Shift to night:</label>
+      <input type="range" id="shift-pct" min="0" max="100" step="5" value="100">
+      <span class="shift-val" id="shift-val-label">100%</span>
+    </div>
+  </div>
+
+  <div id="results">
+    <div class="data-range" id="data-range"></div>
+
+    <!-- Scenario 1: Without EV -->
+    <div id="scenario-no-ev">
+      <h2 style="margin-bottom:1rem;">Without EV Charging</h2>
+      <div class="winner-banner" id="winner1"></div>
+      <div class="summary-cards" id="summary1"></div>
+      <div class="table-wrap">
+        <table id="table1"></table>
+      </div>
+    </div>
+
+    <!-- Scenario 2: With EV -->
+    <div id="scenario-ev" style="margin-top: 2.5rem;">
+      <h2 style="margin-bottom:1rem;" id="ev-heading">With EV Charging (+400 kWh/mo)</h2>
+      <div class="winner-banner" id="winner2"></div>
+      <div class="summary-cards" id="summary2"></div>
+      <div class="table-wrap">
+        <table id="table2"></table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Rates: RES &mdash; 12.623&cent;/kWh (first 800 kWh Oct-Apr), 11.623&cent;/kWh (additional Oct-Apr), 12.623&cent;/kWh (May-Sep) &bull;
+    EV Overnight &mdash; 13.096&cent;/kWh standard, 6.548&cent;/kWh discount (11 PM &ndash; 5 AM EPT)</p>
+    <p style="margin-top: 0.75rem;">
+      Made by Mx772 &nbsp;
+      <a href="https://github.com/MxMiscellanea/DukePowerEvCalculator" target="_blank" rel="noopener" style="color: var(--muted); vertical-align: middle;" title="View on GitHub">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </p>
+  </footer>
+</div>
+
+<script>
+// --- DST / Eastern time ---
+const DST_RANGES = {
+  2023: [Date.UTC(2023,2,12,7), Date.UTC(2023,10,5,6)],
+  2024: [Date.UTC(2024,2,10,7), Date.UTC(2024,10,3,6)],
+  2025: [Date.UTC(2025,2,9,7), Date.UTC(2025,10,2,6)],
+  2026: [Date.UTC(2026,2,8,7), Date.UTC(2026,10,1,6)],
+  2027: [Date.UTC(2027,2,14,7), Date.UTC(2027,10,7,6)],
+};
+
+function toEastern(unixSeconds) {
+  const ms = unixSeconds * 1000;
+  const d = new Date(ms);
+  const year = d.getUTCFullYear();
+  const range = DST_RANGES[year];
+  let offsetHours = -5;
+  if (range && ms >= range[0] && ms < range[1]) {
+    offsetHours = -4;
+  }
+  return new Date(ms + offsetHours * 3600000);
+}
+
+// --- XML Parsing ---
+function parseUsageXML(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  const ns = 'http://naesb.org/espi';
+  const readings = [];
+  const intervalReadings = doc.getElementsByTagNameNS(ns, 'IntervalReading');
+  for (const ir of intervalReadings) {
+    const startEl = ir.getElementsByTagNameNS(ns, 'start')[0];
+    const valueEl = ir.getElementsByTagNameNS(ns, 'value')[0];
+    if (startEl && valueEl) {
+      readings.push({
+        ts: parseInt(startEl.textContent, 10),
+        kwh: parseFloat(valueEl.textContent),
+      });
+    }
+  }
+  return readings;
+}
+
+// --- Filter to last 12 full months ---
+function filterLast12Months(readings) {
+  const now = new Date();
+  // Last complete month
+  let lcMonth = now.getMonth(); // 0-indexed current month, so previous month = current - 1
+  let lcYear = now.getFullYear();
+  if (lcMonth === 0) {
+    lcMonth = 12;
+    lcYear--;
+  }
+  // lcMonth is now 1-indexed last complete month
+
+  // Start: 11 months before last complete month (12 months total, inclusive)
+  let startMonth = lcMonth - 11;
+  let startYear = lcYear;
+  if (startMonth <= 0) {
+    startMonth += 12;
+    startYear--;
+  }
+
+  return {
+    filtered: readings.filter(r => {
+      const dt = toEastern(r.ts);
+      const y = dt.getUTCFullYear();
+      const m = dt.getUTCMonth() + 1;
+      if (y < startYear || (y === startYear && m < startMonth)) return false;
+      if (y > lcYear || (y === lcYear && m > lcMonth)) return false;
+      return true;
+    }),
+    startMonth, startYear, endMonth: lcMonth, endYear: lcYear
+  };
+}
+
+// --- Aggregate ---
+function aggregate(readings) {
+  const monthly = {};
+  const monthlyDiscount = {};
+
+  for (const r of readings) {
+    const dt = toEastern(r.ts);
+    const y = dt.getUTCFullYear();
+    const m = dt.getUTCMonth() + 1;
+    const key = `${y}-${String(m).padStart(2,'0')}`;
+    monthly[key] = (monthly[key] || 0) + r.kwh;
+    const hour = dt.getUTCHours();
+    if (hour >= 23 || hour < 5) {
+      monthlyDiscount[key] = (monthlyDiscount[key] || 0) + r.kwh;
+    }
+  }
+  return { monthly, monthlyDiscount };
+}
+
+// --- Cost calculations ---
+function calcRES(monthlyKwh) {
+  const costs = {};
+  let total = 0;
+  for (const [key, kwh] of Object.entries(monthlyKwh)) {
+    const month = parseInt(key.split('-')[1], 10);
+    let cost;
+    if (month >= 5 && month <= 9) {
+      cost = kwh * 0.12623;
+    } else {
+      cost = kwh <= 800
+        ? kwh * 0.12623
+        : 800 * 0.12623 + (kwh - 800) * 0.11623;
+    }
+    costs[key] = cost;
+    total += cost;
+  }
+  return { total, costs };
+}
+
+function calcEV(monthlyKwh, monthlyDiscount) {
+  const costs = {};
+  let total = 0;
+  for (const [key, kwh] of Object.entries(monthlyKwh)) {
+    const discount = monthlyDiscount[key] || 0;
+    const standard = kwh - discount;
+    const cost = standard * 0.13096 + discount * 0.06548;
+    costs[key] = cost;
+    total += cost;
+  }
+  return { total, costs };
+}
+
+// --- Formatting ---
+const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function fmt$(n) { return '$' + n.toFixed(2); }
+function fmtKwh(n) { return n.toFixed(1); }
+function fmtPct(n) { return n.toFixed(1) + '%'; }
+
+// --- Render ---
+function renderResults(monthly, monthlyDiscount, evKwh, mode, shiftPct) {
+  const keys = Object.keys(monthly).sort();
+  if (keys.length === 0) return;
+
+  // Scenario 1: actual usage (unchanged)
+  const res1 = calcRES(monthly);
+  const ev1 = calcEV(monthly, monthlyDiscount);
+
+  // Scenario 2: depends on mode
+  const monthlyEv = {};
+  const monthlyDiscountEv = {};
+
+  if (mode === 'add') {
+    // Add new kWh, all charged at night
+    for (const k of keys) {
+      monthlyEv[k] = monthly[k] + evKwh;
+      monthlyDiscountEv[k] = (monthlyDiscount[k] || 0) + evKwh;
+    }
+  } else {
+    // Shift: total kWh stays the same, move (evKwh * shiftPct%) from day to night
+    const shiftAmount = evKwh * (shiftPct / 100);
+    for (const k of keys) {
+      monthlyEv[k] = monthly[k]; // total unchanged
+      // Can't shift more than what's currently daytime usage
+      const currentDay = monthly[k] - (monthlyDiscount[k] || 0);
+      const actualShift = Math.min(shiftAmount, currentDay);
+      monthlyDiscountEv[k] = (monthlyDiscount[k] || 0) + actualShift;
+    }
+  }
+
+  const res2 = calcRES(monthlyEv);
+  const ev2 = calcEV(monthlyEv, monthlyDiscountEv);
+
+  renderScenario('1', keys, monthly, monthlyDiscount, res1, ev1);
+  renderScenario('2', keys, monthlyEv, monthlyDiscountEv, res2, ev2);
+
+  document.getElementById('results').style.display = 'block';
+}
+
+function renderScenario(id, keys, monthly, monthlyDiscount, res, ev) {
+  const diff = res.total - ev.total;
+  const winner = diff > 0 ? 'EV Overnight' : 'RES';
+  const savings = Math.abs(diff);
+
+  // Winner banner
+  document.getElementById('winner' + id).innerHTML =
+    `<span>${winner}</span> saves you <span class="amount">${fmt$(savings)}/year</span>`;
+
+  // Summary cards
+  const totalKwh = Object.values(monthly).reduce((a, b) => a + b, 0);
+  const totalNight = keys.reduce((a, k) => a + (monthlyDiscount[k] || 0), 0);
+  document.getElementById('summary' + id).innerHTML = `
+    <div class="card">
+      <div class="label">RES Total</div>
+      <div class="value">${fmt$(res.total)}</div>
+      <div class="detail">${fmtKwh(totalKwh)} kWh total</div>
+    </div>
+    <div class="card">
+      <div class="label">EV Overnight Total</div>
+      <div class="value">${fmt$(ev.total)}</div>
+      <div class="detail">${fmtPct(totalNight / totalKwh * 100)} nighttime usage</div>
+    </div>
+    <div class="card">
+      <div class="label">Annual Savings</div>
+      <div class="value ${diff > 0 ? 'green' : 'red'}">${diff > 0 ? '+' : '-'}${fmt$(savings)}</div>
+      <div class="detail">with ${winner}</div>
+    </div>
+  `;
+
+  // Table
+  let html = `<thead><tr>
+    <th>Month</th><th>Total kWh</th><th>Night kWh</th><th>Night %</th>
+    <th>RES Cost</th><th>EV Cost</th><th>Savings</th>
+  </tr></thead><tbody>`;
+
+  let sumKwh = 0, sumNight = 0, sumRes = 0, sumEv = 0;
+  for (const key of keys) {
+    const [y, mStr] = key.split('-');
+    const m = parseInt(mStr, 10);
+    const kwh = monthly[key];
+    const night = monthlyDiscount[key] || 0;
+    const pct = kwh ? (night / kwh * 100) : 0;
+    const rCost = res.costs[key];
+    const eCost = ev.costs[key];
+    const d = rCost - eCost;
+    sumKwh += kwh; sumNight += night; sumRes += rCost; sumEv += eCost;
+
+    html += `<tr>
+      <td>${MONTH_NAMES[m]} ${y}</td>
+      <td>${fmtKwh(kwh)}</td>
+      <td>${fmtKwh(night)}</td>
+      <td>${fmtPct(pct)}</td>
+      <td>${fmt$(rCost)}</td>
+      <td>${fmt$(eCost)}</td>
+      <td class="${d >= 0 ? 'savings-pos' : 'savings-neg'}">${d >= 0 ? '+' : ''}${fmt$(d)}</td>
+    </tr>`;
+  }
+
+  const totalDiff = sumRes - sumEv;
+  html += `<tr class="total-row">
+    <td>Total</td>
+    <td>${fmtKwh(sumKwh)}</td>
+    <td>${fmtKwh(sumNight)}</td>
+    <td>${fmtPct(sumKwh ? (sumNight / sumKwh * 100) : 0)}</td>
+    <td>${fmt$(sumRes)}</td>
+    <td>${fmt$(sumEv)}</td>
+    <td class="${totalDiff >= 0 ? 'savings-pos' : 'savings-neg'}">${totalDiff >= 0 ? '+' : ''}${fmt$(totalDiff)}</td>
+  </tr>`;
+  html += '</tbody>';
+  document.getElementById('table' + id).innerHTML = html;
+}
+
+// --- State ---
+let parsedReadings = null;
+let filteredMonthly = null;
+let filteredMonthlyDiscount = null;
+
+function processFile(text) {
+  const readings = parseUsageXML(text);
+  if (readings.length === 0) {
+    alert('No usage data found in the file. Make sure this is a Duke Energy XML export.');
+    return;
+  }
+
+  parsedReadings = readings;
+  const { filtered, startMonth, startYear, endMonth, endYear } = filterLast12Months(readings);
+
+  if (filtered.length === 0) {
+    alert('No data found in the last 12 complete months.');
+    return;
+  }
+
+  const agg = aggregate(filtered);
+  filteredMonthly = agg.monthly;
+  filteredMonthlyDiscount = agg.monthlyDiscount;
+
+  document.getElementById('data-range').textContent =
+    `Showing ${filtered.length.toLocaleString()} readings from ${MONTH_NAMES[startMonth]} ${startYear} \u2013 ${MONTH_NAMES[endMonth]} ${endYear}`;
+
+  recalc();
+}
+
+// --- File handling ---
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const browseBtn = document.getElementById('browse-btn');
+const filenameEl = document.getElementById('filename');
+
+browseBtn.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('click', (e) => {
+  if (e.target !== browseBtn) fileInput.click();
+});
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  filenameEl.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = () => processFile(reader.result);
+  reader.readAsText(file);
+}
+
+// --- Controls ---
+const evSlider = document.getElementById('ev-kwh');
+const evLabel = document.getElementById('ev-val-label');
+const modeAddBtn = document.getElementById('mode-add');
+const modeShiftBtn = document.getElementById('mode-shift');
+const modeDesc = document.getElementById('mode-desc');
+const shiftRow = document.getElementById('shift-row');
+const shiftSlider = document.getElementById('shift-pct');
+const shiftLabel = document.getElementById('shift-val-label');
+
+let currentMode = 'add';
+
+function getEvParams() {
+  return {
+    evKwh: parseInt(evSlider.value, 10),
+    mode: currentMode,
+    shiftPct: parseInt(shiftSlider.value, 10),
+  };
+}
+
+function updateHeading() {
+  const p = getEvParams();
+  const heading = document.getElementById('ev-heading');
+  if (p.mode === 'add') {
+    heading.textContent = `With EV Charging (+${p.evKwh} kWh/mo)`;
+  } else {
+    heading.textContent = `Shifting ${p.evKwh} kWh/mo (${p.shiftPct}% to night)`;
+  }
+}
+
+function recalc() {
+  if (!filteredMonthly) return;
+  const p = getEvParams();
+  updateHeading();
+  renderResults(filteredMonthly, filteredMonthlyDiscount, p.evKwh, p.mode, p.shiftPct);
+}
+
+evSlider.addEventListener('input', () => {
+  evLabel.textContent = evSlider.value + ' kWh';
+  recalc();
+});
+
+shiftSlider.addEventListener('input', () => {
+  shiftLabel.textContent = shiftSlider.value + '%';
+  recalc();
+});
+
+modeAddBtn.addEventListener('click', () => {
+  currentMode = 'add';
+  modeAddBtn.classList.add('active');
+  modeShiftBtn.classList.remove('active');
+  modeDesc.textContent = "Adds EV charging kWh as new usage, all charged at night. Use this if you don't have an EV yet.";
+  shiftRow.style.display = 'none';
+  recalc();
+});
+
+modeShiftBtn.addEventListener('click', () => {
+  currentMode = 'shift';
+  modeShiftBtn.classList.add('active');
+  modeAddBtn.classList.remove('active');
+  modeDesc.textContent = "You already charged an EV during the day last year. This shifts that usage to nighttime hours instead of adding new kWh.";
+  shiftRow.style.display = 'flex';
+  recalc();
+});
+</script>
+</body>
+</html>
